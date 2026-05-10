@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAGgent — Enterprise AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="6" fill="#7c5cfc"/><path d="M8 20V8l6 4-6 4V20zm6-4l6-4v8l-6-4z" fill="#fff"/></svg>
+                <span class="logo-text">RAGgent</span>
+            </div>
+            <div class="user-info" id="user-info">
+                <span class="user-email" id="user-email"></span>
+            </div>
+        </div>
+
+        <div class="sidebar-group">
+            <div class="group-title">Workspace</div>
+            <button class="sidebar-btn" id="new-chat-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New Chat
+            </button>
+            <button class="sidebar-btn mt-2" id="settings-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                Settings
+            </button>
+        </div>
+
+        <div class="sidebar-group history-group">
+            <div class="group-title">History</div>
+            <div class="conv-list" id="conv-list">
+                <div class="conv-empty" id="conv-empty">No conversations yet</div>
+            </div>
+        </div>
+
+        <div class="sidebar-group">
+            <div class="group-title">Document</div>
+            <div class="upload-zone" id="upload-zone">
+                <input type="file" id="file-input" accept=".docx,.xlsx,.pdf,.txt" hidden>
+                <div class="upload-inner">
+                    <svg class="upload-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span class="upload-label" id="upload-label">Upload File</span>
+                </div>
+                <div class="upload-bar" id="upload-bar"></div>
+            </div>
+            <div class="upload-status" id="upload-status"></div>
+        </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="workspace">
+        
+        <!-- Document Pane (Hidden initially) -->
+        <div class="doc-pane" id="doc-pane" style="display: none;">
+            <div class="pane-header">
+                <span>Document Viewer</span>
+                <button class="pane-close-btn" id="close-doc-btn" title="Hide document viewer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="doc-content" id="doc-content"></div>
+        </div>
+
+        <!-- Draggable Resizer -->
+        <div class="pane-resizer" id="pane-resizer" style="display:none"></div>
+
+        <!-- Chat Pane -->
+        <main class="chat-pane">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="back-btn" id="back-btn" style="display:none" title="Back to Home">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                        Back
+                    </button>
+                    <span class="topbar-title">Assistant</span>
+                    <span class="topbar-badge" id="badge-text">groq / llama-3.3-70b-versatile</span>
+                </div>
+                <div class="topbar-right">
+                    <button class="icon-btn" id="toggle-doc-btn" title="Toggle document viewer" style="display:none">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                    </button>
+                    <button class="icon-btn" id="clear-chat-btn" title="Clear chat">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    </button>
+                    <button class="logout-topbar-btn" id="logout-topbar-btn" title="Logout">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Logout
+                    </button>
+                </div>
+            </header>
+
+            <div class="messages" id="messages-container">
+                <div class="welcome" id="welcome-screen">
+                    <div class="welcome-badge">Multi-Agent RAG System</div>
+                    <h2 class="welcome-title">What can I help you with?</h2>
+                    <p class="welcome-desc">Upload a document, then ask questions. RAGgent routes your query<br>to the right specialist agent.</p>
+                    <div class="prompt-grid">
+                        <button class="prompt-card agent-summary" data-prompt="Summarize the key points of this document">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            <span class="prompt-text">Summarize key points</span>
+                            <span class="prompt-agent">Summary Agent</span>
+                        </button>
+                        <button class="prompt-card agent-suggestion" data-prompt="What improvements can be made to this document?">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            <span class="prompt-text">Suggest improvements</span>
+                            <span class="prompt-agent">Suggestion Agent</span>
+                        </button>
+                        <button class="prompt-card agent-modification" data-prompt="Rewrite the introduction to be more professional">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            <span class="prompt-text">Rewrite a section</span>
+                            <span class="prompt-agent">Modification Agent</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="composer">
+                <div class="composer-inner">
+                    <textarea id="message-input" placeholder="Ask a question..." rows="1"></textarea>
+                    <button id="send-btn" class="send-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <dialog class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="modal-close-x" id="cancel-settings-btn" title="Close without saving">✕</button>
+            </div>
+            <div class="field mt-3">
+                <label class="field-label">Provider</label>
+                <select id="provider-select" class="field-input">
+                    <option value="groq">Groq (Fast — Llama 3)</option>
+                    <option value="ollama">Ollama (Local)</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="gemini">Google Gemini</option>
+                </select>
+            </div>
+            <div class="field">
+                <label class="field-label">Model</label>
+                <input type="text" id="model-input" class="field-input" value="llama-3.3-70b-versatile">
+                <select id="model-select" class="field-input" style="display:none"></select>
+            </div>
+            <div class="modal-footer mt-4">
+                <button class="cancel-btn" id="cancel-settings-btn2">
+                    ← Back
+                </button>
+                <button class="primary-btn" id="close-settings-btn">Save &amp; Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script src="/static/app.js"></script>
+
+    <!-- Auth Modal -->
+    <div class="auth-overlay" id="auth-overlay">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <svg width="32" height="32" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="6" fill="#7c5cfc"/><path d="M8 20V8l6 4-6 4V20zm6-4l6-4v8l-6-4z" fill="#fff"/></svg>
+                <span>RAGgent</span>
+            </div>
+            <p class="auth-subtitle">Enterprise Multi-Agent AI</p>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Login</button>
+                <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <form class="auth-form" id="login-form" onsubmit="handleLogin(event)">
+                <div class="auth-field">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email">
+                </div>
+                <div class="auth-field">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" maxlength="72">
+                </div>
+                <div class="auth-error" id="login-error"></div>
+                <button type="submit" class="auth-submit" id="login-btn">Login</button>
+            </form>
+
+            <!-- Register Form -->
+            <form class="auth-form" id="register-form" style="display:none" onsubmit="handleRegister(event)">
+                <div class="auth-field">
+                    <label>Email</label>
+                    <input type="email" id="reg-email" placeholder="you@example.com" required autocomplete="email">
+                </div>
+                <div class="auth-field">
+                    <label>Password <span style="color:var(--text-tertiary);font-size:11px">(min 6 chars)</span></label>
+                    <input type="password" id="reg-password" placeholder="••••••••" required autocomplete="new-password" minlength="6" maxlength="72">
+                </div>
+                <div class="auth-field">
+                    <label>Confirm Password</label>
+                    <input type="password" id="reg-confirm" placeholder="••••••••" required autocomplete="new-password" minlength="6" maxlength="72">
+                </div>
+                <div class="auth-error" id="reg-error"></div>
+                <button type="submit" class="auth-submit" id="reg-btn">Create Account</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

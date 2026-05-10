@@ -1,0 +1,58 @@
+# ── Secrets & Config ─────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────────────────────
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# ── Data & Uploads (never commit user data) ───────────────────────────────────
+data/uploads/
+data/faiss_index/
+data/faiss_indexes/
+*.db
+*.sqlite
+*.sqlite3
+
+# ── ML Model Cache ────────────────────────────────────────────────────────────
+# Sentence-transformer / HuggingFace model downloads
+.cache/
+models/
+*.bin
+*.pt
+*.safetensors
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Docker (keep docker-compose.yml but ignore override) ──────────────────────
+docker-compose.override.yml
