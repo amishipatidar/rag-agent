@@ -120,7 +120,6 @@ function initApp() {
     loadModels();
     onProviderChange();
     updateBadge();
-    checkExistingDocument();
     loadConversations();
 }
 
@@ -156,9 +155,16 @@ function renderConversations(convs) {
         const timeStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
         item.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-            <span class="conv-title">${conv.title || 'Chat'}</span>
-            <span class="conv-date">${timeStr}</span>
+            <div class="conv-item-left">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                <span class="conv-title">${conv.title || 'Chat'}</span>
+            </div>
+            <div class="conv-item-right">
+                <span class="conv-date">${timeStr}</span>
+                <button class="conv-delete-btn" title="Delete Chat" onclick="event.stopPropagation(); deleteConversation(${conv.id})">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+            </div>
         `;
         item.addEventListener('click', () => loadConversationMessages(conv.id, item));
         list.appendChild(item);
@@ -195,6 +201,21 @@ async function loadConversationMessages(convId, itemEl) {
     } catch (e) {}
 }
 
+async function deleteConversation(convId) {
+    if (!confirm('Are you sure you want to delete this chat?')) return;
+    try {
+        const resp = await authFetch(`${API}/api/conversations/${convId}`, { method: 'DELETE' });
+        if (resp.ok) {
+            if (conversationId === convId) goHome();
+            loadConversations();
+        } else {
+            alert('Failed to delete conversation.');
+        }
+    } catch (e) {
+        alert('Error deleting conversation.');
+    }
+}
+
 // DOM Elements
 const providerSelect = document.getElementById('provider-select');
 const modelInput = document.getElementById('model-input');
@@ -209,7 +230,6 @@ const messageInput = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
 const badgeText = document.getElementById('badge-text');
 const newChatBtn = document.getElementById('new-chat-btn');
-const clearChatBtn = document.getElementById('clear-chat-btn');
 const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
@@ -263,10 +283,8 @@ function setupEventListeners() {
 
     document.getElementById('logout-topbar-btn').addEventListener('click', handleLogout);
     newChatBtn.addEventListener('click', startNewChat);
-    clearChatBtn.addEventListener('click', clearChat);
     settingsBtn.addEventListener('click', () => settingsModal.showModal());
     closeSettingsBtn.addEventListener('click', () => settingsModal.close());
-    document.getElementById('cancel-settings-btn').addEventListener('click', () => settingsModal.close());
     document.getElementById('cancel-settings-btn2').addEventListener('click', () => settingsModal.close());
 
     // Back button — returns to welcome screen
@@ -624,5 +642,3 @@ function startNewChat() {
     if (welcomeScreen) { messagesContainer.appendChild(welcomeScreen); welcomeScreen.style.display = ''; }
     messageInput.value = ''; messageInput.focus();
 }
-
-function clearChat() { if (confirm('Clear current chat?')) startNewChat(); }

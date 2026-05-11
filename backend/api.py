@@ -18,7 +18,7 @@ from typing import Optional, List
 from backend.database import (
     init_db, create_conversation, save_message,
     get_conversation_history, get_context_messages, list_conversations,
-    create_user, get_user_by_email
+    create_user, get_user_by_email, delete_conversation
 )
 from backend.providers import LLMProviderFactory
 from backend.rag_pipeline import FAISSIndex, chunk_text, embed_texts, ingest_document, search_faiss
@@ -432,6 +432,15 @@ async def get_conversations(current_user: dict = Depends(get_current_user)):
 async def get_messages(conversation_id: int, current_user: dict = Depends(get_current_user)):
     """Get messages for a conversation."""
     return get_conversation_history(conversation_id)
+
+
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation_api(conversation_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete a conversation."""
+    success = delete_conversation(conversation_id, user_id=current_user["id"])
+    if not success:
+        raise HTTPException(status_code=404, detail="Conversation not found or not owned by user.")
+    return {"status": "deleted"}
 
 
 @app.get("/api/status")

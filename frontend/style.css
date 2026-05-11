@@ -34,6 +34,12 @@ body {
     overflow: hidden;
 }
 
+/* Custom Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: var(--r-full); border: 3px solid var(--surface-0); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
 /* Typography Helpers */
 .mt-2 { margin-top: 8px; }
 .mt-3 { margin-top: 12px; }
@@ -78,7 +84,7 @@ body {
 .conv-empty { font-size: 12px; color: var(--text-tertiary); text-align: center; padding: 12px 0; }
 
 .conv-item {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
     width: 100%; padding: 7px 10px; border-radius: var(--r-md);
     background: transparent; border: none; color: var(--text-secondary);
     font-size: 12px; cursor: pointer; text-align: left; transition: 0.12s;
@@ -87,8 +93,18 @@ body {
 .conv-item.active { background: var(--accent-muted); color: var(--accent); }
 .conv-item svg { flex-shrink: 0; color: var(--text-tertiary); }
 .conv-item.active svg { color: var(--accent); }
+.conv-item-left { display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden; }
+.conv-item-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .conv-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv-date { font-size: 10px; color: var(--text-tertiary); flex-shrink: 0; }
+.conv-delete-btn {
+    display: none; background: transparent; border: none; color: var(--text-tertiary); cursor: pointer;
+    border-radius: var(--r-md); padding: 2px;
+}
+.conv-item:hover .conv-delete-btn { display: flex; align-items: center; justify-content: center; }
+.conv-item:hover .conv-date { display: none; }
+.conv-delete-btn:hover { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+.conv-delete-btn:hover svg { color: var(--red); }
 
 /* ── Upload ──────────────────────────────────────────────────────────── */
 .upload-zone {
@@ -330,8 +346,9 @@ body {
 .field-input {
     width: 100%; background: var(--surface-2); color: var(--text-primary);
     border: 1px solid var(--border-default); border-radius: var(--r-md);
-    padding: 8px; font-size: 13px; font-family: inherit; outline: none;
+    padding: 8px 12px; font-size: 13px; font-family: inherit; outline: none;
 }
+select.field-input { padding-right: 32px; appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%23ececf1" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
 .field-input:focus { border-color: var(--accent); }
 .primary-btn {
     width: 100%; background: var(--accent); color: #fff; border: none;

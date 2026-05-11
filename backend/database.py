@@ -300,3 +300,27 @@ def list_conversations(user_id: int = None, db_path: str = None) -> List[Dict]:
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def delete_conversation(conversation_id: int, user_id: int = None, db_path: str = None) -> bool:
+    """
+    Delete a conversation by ID, optionally validating ownership.
+
+    Args:
+        conversation_id: The conversation to delete.
+        user_id: Optional user ID to ensure the conversation belongs to the user.
+        db_path: Optional custom database path.
+
+    Returns:
+        True if deleted, False otherwise.
+    """
+    conn = _get_connection(db_path)
+    cursor = conn.cursor()
+    if user_id is not None:
+        cursor.execute("DELETE FROM conversations WHERE id = ? AND user_id = ?", (conversation_id, user_id))
+    else:
+        cursor.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
