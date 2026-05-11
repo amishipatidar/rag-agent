@@ -1,5 +1,5 @@
 """
-FastAPI Backend - REST API for the RAGgent chatbot.
+FastAPI Backend - REST API for the RAG Agent chatbot.
 Endpoints: /upload, /chat, /models, /conversations
 """
 import os
@@ -29,7 +29,7 @@ from fastapi import Depends
 
 # ── App Setup ─────────────────────────────────────────────────────────────
 
-app = FastAPI(title="RAGgent", version="1.0.0")
+app = FastAPI(title="RAG Agent", version="1.0.0")
 
 # Initialize database on startup
 init_db()
