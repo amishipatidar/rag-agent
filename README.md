@@ -1,4 +1,4 @@
-# RAGgent 🧠
+# RAG Agent
 > An Enterprise-Grade Multi-Agent RAG Chatbot
 
 ![RAGgent](https://img.shields.io/badge/Status-Active-success)
@@ -6,9 +6,9 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688)
 ![LangChain](https://img.shields.io/badge/LangChain-Integration-green)
 
-RAGgent is a powerful, persona-based AI chatbot that uses Retrieval-Augmented Generation (RAG) to provide highly context-aware responses based on your documents. Designed for enterprise use, it features a multi-agent architecture to dynamically route user queries to the best specialized agent.
+RAG Agent is a powerful, AI chatbot that uses Retrieval-Augmented Generation (RAG) to provide highly context-aware responses based on your documents. Designed for enterprise use, it features a multi-agent architecture to dynamically route user queries to the best specialized agent.
 
-## ✨ Key Features
+## Key Features
 - **Multi-Agent Architecture:** Dynamically routes queries to Specialist Agents (Summary, Suggestion, Modification).
 - **Document Ingestion:** Upload PDF, DOCX, and XLSX files to dynamically create a FAISS vector database.
 - **Persistent Memory:** SQLite database keeps track of user conversations, agent routing history, and LLM context.
@@ -17,7 +17,7 @@ RAGgent is a powerful, persona-based AI chatbot that uses Retrieval-Augmented Ge
 
 ---
 
-## 🚀 Quick Start (Local)
+## Quick Start (Local)
 
 ### 1. Prerequisites
 - Python 3.10+
@@ -57,7 +57,7 @@ Navigate to `http://localhost:8000` to interact with the RAGgent UI!
 
 ---
 
-## 🌐 Deployment
+## Deployment
 This repository is pre-configured for easy deployment on **Railway** and **Render**.
 
 ### Deploy to Railway
@@ -68,11 +68,11 @@ This repository is pre-configured for easy deployment on **Railway** and **Rende
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 * `backend/` - FastAPI server, LangChain agents, FAISS pipeline, and authentication.
 * `frontend/` - Enterprise UI built with vanilla HTML/CSS/JS.
 * `data/` - (Git Ignored) Stores SQLite DB and FAISS index files.
 * `Documentation/` - Technical R&D specs and architectural overviews.
 
-## 🛡️ License
+## License
 Distributed under the MIT License. See `LICENSE` for more information.
