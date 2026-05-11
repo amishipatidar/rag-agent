@@ -275,8 +275,6 @@ function setupEventListeners() {
     document.getElementById('close-doc-btn').addEventListener('click', hideDocumentPane);
     document.getElementById('toggle-doc-btn').addEventListener('click', toggleDocumentPane);
 
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
-
     document.querySelectorAll('.prompt-card').forEach(card => {
         card.addEventListener('click', () => {
             messageInput.value = card.getAttribute('data-prompt');
