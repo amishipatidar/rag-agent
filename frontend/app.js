@@ -111,6 +111,19 @@ function goHome() {
     }
     document.getElementById('back-btn').style.display = 'none';
     document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+    checkExistingDocument();
+}
+
+function startNewChat() {
+    conversationId = null;
+    messagesContainer.innerHTML = '';
+    if (welcomeScreen) {
+        messagesContainer.appendChild(welcomeScreen);
+        welcomeScreen.style.display = '';
+    }
+    document.getElementById('back-btn').style.display = 'none';
+    document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+    checkExistingDocument();
 }
 
 function initApp() {
@@ -118,9 +131,10 @@ function initApp() {
     document.getElementById('user-email').textContent = email;
     currentUserEmail = email;
     loadModels();
-    onProviderChange();
+    fetchCommands();
     updateBadge();
     loadConversations();
+    checkExistingDocument();
 }
 
 // ── Conversation History ───────────────────────────────────────────────────
@@ -198,6 +212,7 @@ async function loadConversationMessages(convId, itemEl) {
         });
 
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        checkExistingDocument();
     } catch (e) {}
 }
 
@@ -217,6 +232,9 @@ async function deleteConversation(convId) {
 }
 
 // DOM Elements
+const sidebar = document.getElementById('sidebar');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
 const providerSelect = document.getElementById('provider-select');
 const modelInput = document.getElementById('model-input');
 const modelSelect = document.getElementById('model-select');
@@ -234,6 +252,7 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
 const docPane = document.getElementById('doc-pane');
+const commandAutocomplete = document.getElementById('command-autocomplete');
 const docContent = document.getElementById('doc-content');
 
 // Init
@@ -258,18 +277,148 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ── Slash Command Autocomplete ─────────────────────────────────────────
+let _commands = {};
+let _acActiveIndex = -1;
+let _acFilteredCommands = [];
+
+async function fetchCommands() {
+    try {
+        const resp = await authFetch(`${API}/api/commands`);
+        if (resp.ok) _commands = await resp.json();
+    } catch (e) {
+        // Fallback static commands
+        _commands = {
+            '/help':    { description: 'Show command reference', icon: '?', agent: 'system' },
+            '/status':  { description: 'Document & index status', icon: 'i', agent: 'system' },
+            '/clear':   { description: 'Clear conversation', icon: '×', agent: 'system' },
+            '/chat':    { description: 'General conversation (no doc needed)', icon: '›', agent: 'general' },
+            '/summary': { description: 'Route to Summary Agent', icon: 'Σ', agent: 'summary' },
+            '/suggest': { description: 'Route to Suggestion Agent', icon: '*', agent: 'suggestion' },
+            '/modify':  { description: 'Route to Modification Agent', icon: '/', agent: 'modification' },
+        };
+    }
+}
+
+function showCommandAutocomplete(filter = '') {
+    const keys = Object.keys(_commands);
+    _acFilteredCommands = filter
+        ? keys.filter(k => k.startsWith('/' + filter))
+        : keys;
+    if (_acFilteredCommands.length === 0) {
+        hideCommandAutocomplete();
+        return;
+    }
+    _acActiveIndex = 0;
+    commandAutocomplete.innerHTML =
+        '<div class="command-autocomplete-header">Command Activation</div>' +
+        _acFilteredCommands.map((cmd, i) => {
+            const c = _commands[cmd];
+            return `<button class="command-item${i === 0 ? ' active' : ''}" data-cmd="${cmd}">
+                <span class="command-icon">${c.icon}</span>
+                <div class="command-info">
+                    <span class="command-name">${cmd}</span>
+                    <span class="command-desc">${c.description}</span>
+                </div>
+                <span class="command-agent-pill ${c.agent}">${c.agent}</span>
+            </button>`;
+        }).join('');
+    commandAutocomplete.style.display = 'block';
+
+    // Click handlers on items
+    commandAutocomplete.querySelectorAll('.command-item').forEach(item => {
+        item.addEventListener('click', () => {
+            selectCommand(item.dataset.cmd);
+        });
+    });
+}
+
+function hideCommandAutocomplete() {
+    commandAutocomplete.style.display = 'none';
+    _acActiveIndex = -1;
+    _acFilteredCommands = [];
+}
+
+function selectCommand(cmd) {
+    // For system commands that don't take args, set and send immediately
+    const noArgCmds = ['/help', '/status', '/clear'];
+    if (noArgCmds.includes(cmd)) {
+        messageInput.value = cmd;
+        hideCommandAutocomplete();
+        messageInput.focus();
+        sendMessage();
+    } else {
+        messageInput.value = cmd + ' ';
+        hideCommandAutocomplete();
+        messageInput.focus();
+    }
+}
+
+function handleAutocompleteKeydown(e) {
+    if (commandAutocomplete.style.display === 'none') return false;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        _acActiveIndex = Math.min(_acActiveIndex + 1, _acFilteredCommands.length - 1);
+        updateAutocompleteActive();
+        return true;
+    }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        _acActiveIndex = Math.max(_acActiveIndex - 1, 0);
+        updateAutocompleteActive();
+        return true;
+    }
+    if (e.key === 'Tab' || e.key === 'Enter') {
+        if (_acActiveIndex >= 0 && _acActiveIndex < _acFilteredCommands.length) {
+            e.preventDefault();
+            selectCommand(_acFilteredCommands[_acActiveIndex]);
+            return true;
+        }
+    }
+    if (e.key === 'Escape') {
+        hideCommandAutocomplete();
+        return true;
+    }
+    return false;
+}
+
+function updateAutocompleteActive() {
+    const items = commandAutocomplete.querySelectorAll('.command-item');
+    items.forEach((item, i) => item.classList.toggle('active', i === _acActiveIndex));
+    // Scroll active into view
+    if (items[_acActiveIndex]) items[_acActiveIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function onMessageInputForAutocomplete() {
+    const val = messageInput.value;
+    // Show autocomplete when the text is exactly "/" or "/" followed by word characters at the start
+    const match = val.match(/^\/(\w*)$/);
+    if (match) {
+        showCommandAutocomplete(match[1]);
+    } else {
+        hideCommandAutocomplete();
+    }
+}
+
+
 function setupEventListeners() {
+    if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', toggleSidebar);
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeSidebar);
+
     sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keydown', (e) => {
+        // Autocomplete navigation takes priority
+        if (handleAutocompleteKeydown(e)) return;
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
     messageInput.addEventListener('input', () => {
         messageInput.style.height = 'auto';
         messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+        onMessageInputForAutocomplete();
     });
 
     providerSelect.addEventListener('change', onProviderChange);
-    modelInput.addEventListener('input', updateBadge);
     modelSelect.addEventListener('change', () => { modelInput.value = modelSelect.value; updateBadge(); });
 
     uploadZone.addEventListener('click', () => fileInput.click());
@@ -299,45 +448,123 @@ function setupEventListeners() {
             sendMessage();
         });
     });
+
+    // Close autocomplete on outside click
+    document.addEventListener('click', (e) => {
+        if (!messageInput.contains(e.target) && !commandAutocomplete.contains(e.target)) {
+            hideCommandAutocomplete();
+        }
+    });
 }
 
-function getSelectedModel() { return modelInput.value.trim() || 'llama3'; }
+function toggleSidebar() {
+    if (sidebar) sidebar.classList.toggle('open');
+    if (sidebarBackdrop) sidebarBackdrop.classList.toggle('visible');
+}
+
+function closeSidebar() {
+    if (sidebar) sidebar.classList.remove('open');
+    if (sidebarBackdrop) sidebarBackdrop.classList.remove('visible');
+}
+
+function getSelectedModel() {
+    // Prefer dropdown value if visible, otherwise fall back to text input
+    if (modelSelect.style.display !== 'none' && modelSelect.value) return modelSelect.value;
+    return modelInput.value.trim() || 'llama3';
+}
 function updateBadge() { badgeText.textContent = `${providerSelect.value} / ${getSelectedModel()}`; }
 
+// Cache for /api/models response
+let _modelsCache = null;
+
 async function loadModels() {
-    const provider = providerSelect.value;
     try {
         const resp = await authFetch(`${API}/api/models`);
-        const data = await resp.json();
-        if (provider === 'ollama') {
-            const models = data.ollama || [];
-            if (models.length > 0) {
-                modelSelect.innerHTML = '';
-                models.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; modelSelect.appendChild(opt); });
-                modelSelect.style.display = ''; modelInput.style.display = 'none'; modelInput.value = models[0];
-            } else { modelSelect.style.display = 'none'; modelInput.style.display = ''; modelInput.value = modelInput.value || 'llama3'; }
+        _modelsCache = await resp.json();
+    } catch (err) {
+        console.error("Failed to fetch models, using fallback.", err);
+        _modelsCache = {
+            "ollama": [],
+            "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+            "gemini": ["gemini-2.0-flash", "gemini-2.5-flash-preview-05-20", "gemini-1.5-pro"],
+            "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
+        };
+    }
+    populateModelDropdown();
+}
+
+function populateModelDropdown() {
+    const provider = providerSelect.value;
+    const models = _modelsCache ? (_modelsCache[provider] || []) : [];
+
+    if (models.length > 0) {
+        modelSelect.innerHTML = '';
+        models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            modelSelect.appendChild(opt);
+        });
+        // Preserve current selection if it exists in the list
+        const current = modelInput.value.trim();
+        if (models.includes(current)) {
+            modelSelect.value = current;
+        } else {
+            modelSelect.value = models[0];
+            modelInput.value = models[0];
         }
-    } catch (err) { modelSelect.style.display = 'none'; modelInput.style.display = ''; }
+        modelSelect.style.display = '';
+        modelInput.style.display = 'none';
+    } else {
+        // No known models for this provider — show text input
+        modelSelect.style.display = 'none';
+        modelInput.value = '';
+        modelInput.style.display = '';
+    }
     updateBadge();
 }
 
 function onProviderChange() {
     const provider = providerSelect.value;
-    modelSelect.style.display = 'none'; modelInput.style.display = '';
-    const defaults = { ollama: 'llama3', openai: 'gpt-4o', gemini: 'gemini-pro', groq: 'llama-3.3-70b-versatile' };
+    const defaults = { ollama: 'llama3', openai: 'gpt-4o', gemini: 'gemini-2.0-flash', groq: 'llama-3.3-70b-versatile' };
     modelInput.value = defaults[provider] || 'llama3';
-    if (provider === 'ollama') loadModels();
-    updateBadge();
+    if (_modelsCache) {
+        populateModelDropdown();
+    } else {
+        loadModels();
+    }
 }
 
 async function checkExistingDocument() {
+    if (!conversationId) {
+        uploadZone.classList.remove('uploaded');
+        document.getElementById('upload-label').textContent = 'Upload File';
+        hideDocumentPane();
+        return;
+    }
+    
     try {
-        const resp = await authFetch(`${API}/api/document`);
-        if (resp.ok) {
-            const data = await resp.json();
-            showDocumentPane(data.text);
+        const resp = await authFetch(`${API}/api/status?conversation_id=${conversationId}`);
+        const data = await resp.json();
+        if (data.document_loaded) {
+            uploadZone.classList.add('uploaded');
+            document.getElementById('upload-label').textContent = data.document_loaded;
+            
+            const docResp = await authFetch(`${API}/api/document?conversation_id=${conversationId}`);
+            if (docResp.ok) {
+                const docData = await docResp.json();
+                showDocumentPane(docData.text);
+            }
+        } else {
+            uploadZone.classList.remove('uploaded');
+            document.getElementById('upload-label').textContent = 'Upload File';
+            hideDocumentPane();
         }
-    } catch (e) {}
+    } catch (e) {
+        uploadZone.classList.remove('uploaded');
+        document.getElementById('upload-label').textContent = 'Upload File';
+        hideDocumentPane();
+    }
 }
 
 async function handleFileUpload() {
@@ -349,6 +576,9 @@ async function handleFileUpload() {
 
     const formData = new FormData();
     formData.append('file', file);
+    if (conversationId) {
+        formData.append('conversation_id', conversationId);
+    }
 
     try {
         if (uploadProgress) uploadProgress.style.width = '60%';
@@ -364,6 +594,12 @@ async function handleFileUpload() {
             uploadZone.classList.add('uploaded');
             document.getElementById('upload-label').textContent = file.name;
             setTimeout(() => { if (uploadProgress) uploadProgress.style.width = '0%'; }, 500);
+            
+            if (data.conversation_id && data.conversation_id !== conversationId) {
+                conversationId = data.conversation_id;
+                loadConversations();
+            }
+            
             checkExistingDocument();
         } else {
             setUploadStatus(`Error: ${data.detail}`, 'error');
@@ -450,7 +686,25 @@ function toggleDocumentPane() {
 async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
+    hideCommandAutocomplete();
     if (welcomeScreen) welcomeScreen.style.display = 'none';
+
+    // ── /clear interception: handle entirely client-side ──────────────
+    if (text.toLowerCase() === '/clear') {
+        if (conversationId) {
+            try {
+                await authFetch(`${API}/api/conversations/${conversationId}`, { method: 'DELETE' });
+            } catch (e) { /* ignore */ }
+        }
+        conversationId = null;
+        messagesContainer.innerHTML = '';
+        if (welcomeScreen) { messagesContainer.appendChild(welcomeScreen); welcomeScreen.style.display = ''; }
+        messageInput.value = ''; messageInput.style.height = 'auto';
+        document.getElementById('back-btn').style.display = 'none';
+        loadConversations();
+        messageInput.focus();
+        return;
+    }
 
     addMessage('user', text);
     messageInput.value = ''; messageInput.style.height = 'auto'; sendBtn.disabled = true;
@@ -485,7 +739,7 @@ async function sendMessage() {
         msgEl.className = 'message assistant';
         const avatar = document.createElement('div');
         avatar.className = 'msg-avatar router';
-        avatar.textContent = '⚙️';
+        avatar.textContent = 'AI';
         const bubble = document.createElement('div');
         bubble.className = 'msg-body streaming';
         msgEl.appendChild(avatar);
@@ -516,8 +770,8 @@ async function sendMessage() {
                         intent = event.intent;
                         conversationId = event.conversation_id;
                         // Update avatar icon based on intent
-                        const icons = { summary: '📋', suggestion: '💡', modification: '✏️' };
-                        avatar.textContent = icons[intent] || '⚙️';
+                        const icons = { summary: 'S', suggestion: 'G', modification: 'M' };
+                        avatar.textContent = icons[intent] || 'AI';
                         avatar.className = `msg-avatar assistant ${intent}`;
 
                     } else if (event.type === 'token') {
@@ -540,6 +794,8 @@ async function sendMessage() {
                         bubble.appendChild(meta);
                         // Refresh conversation list so new chat appears in sidebar
                         loadConversations();
+                        // Update document pane visibility in case conversation ID changed
+                        checkExistingDocument();
 
                     } else if (event.type === 'error') {
                         bubble.textContent = `Error: ${event.detail}`;
@@ -561,21 +817,21 @@ function addMessage(role, content, intent, provider, model, latency_ms) {
     const avatar = document.createElement('div');
     
     let aiClass = 'msg-avatar assistant';
-    let aiIcon = '⚙️';
+    let aiIcon = 'AI';
     
     if (intent === 'summary') {
         aiClass += ' summary';
-        aiIcon = '📋';
+        aiIcon = 'S';
     } else if (intent === 'suggestion') {
         aiClass += ' suggestion';
-        aiIcon = '💡';
+        aiIcon = 'G';
     } else if (intent === 'modification') {
         aiClass += ' modification';
-        aiIcon = '✏️';
+        aiIcon = 'M';
     }
 
     avatar.className = role === 'user' ? 'msg-avatar' : aiClass;
-    avatar.textContent = role === 'user' ? '👤' : aiIcon;
+    avatar.textContent = role === 'user' ? 'U' : aiIcon;
 
     const bubble = document.createElement('div');
     bubble.className = 'msg-body';
@@ -607,7 +863,7 @@ function showTyping() {
     msg.className = 'message assistant';
     
     msg.innerHTML = `
-        <div class="msg-avatar router">⚙️</div>
+        <div class="msg-avatar router">AI</div>
         <div class="msg-body">
             <div class="routing-container" id="routing-container">
                 <div class="routing-step">
@@ -635,10 +891,4 @@ function showTyping() {
     }, 1500);
 
     return msg;
-}
-
-function startNewChat() {
-    conversationId = null; messagesContainer.innerHTML = '';
-    if (welcomeScreen) { messagesContainer.appendChild(welcomeScreen); welcomeScreen.style.display = ''; }
-    messageInput.value = ''; messageInput.focus();
 }

@@ -46,11 +46,16 @@ def init_db(db_path: str = None) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             title TEXT DEFAULT 'New Conversation',
+            uploaded_filename TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     """)
+    try:
+        cursor.execute("ALTER TABLE conversations ADD COLUMN uploaded_filename TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
@@ -291,12 +296,12 @@ def list_conversations(user_id: int = None, db_path: str = None) -> List[Dict]:
     cursor = conn.cursor()
     if user_id is not None:
         cursor.execute(
-            "SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC",
+            "SELECT id, title, uploaded_filename, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC",
             (user_id,)
         )
     else:
         # Legacy: return all conversations (for backward compat)
-        cursor.execute("SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC")
+        cursor.execute("SELECT id, title, uploaded_filename, created_at, updated_at FROM conversations ORDER BY updated_at DESC")
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -324,3 +329,13 @@ def delete_conversation(conversation_id: int, user_id: int = None, db_path: str 
     conn.commit()
     conn.close()
     return deleted
+
+def update_conversation_filename(conversation_id: int, filename: str, db_path: str = None) -> bool:
+    """Update the uploaded filename for a conversation."""
+    conn = _get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE conversations SET uploaded_filename = ? WHERE id = ?", (filename, conversation_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated

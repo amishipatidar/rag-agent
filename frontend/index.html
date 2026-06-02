@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=2.2">
 </head>
 <body>
     <!-- Sidebar -->
@@ -57,6 +57,9 @@
         </div>
     </aside>
 
+    <!-- Sidebar backdrop (mobile) -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
     <!-- Main Workspace -->
     <div class="workspace">
         
@@ -78,6 +81,9 @@
         <main class="chat-pane">
             <header class="topbar">
                 <div class="topbar-left">
+                    <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Toggle sidebar">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
                     <button class="back-btn" id="back-btn" style="display:none" title="Back to Home">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
                         Back
@@ -91,7 +97,7 @@
                     </button>
                     <button class="logout-topbar-btn" id="logout-topbar-btn" title="Logout">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                        Logout
+                        <span class="logout-label">Logout</span>
                     </button>
                 </div>
             </header>
@@ -122,8 +128,9 @@
             </div>
 
             <div class="composer">
+                <div id="command-autocomplete" class="command-autocomplete" style="display:none"></div>
                 <div class="composer-inner">
-                    <textarea id="message-input" placeholder="Ask a question..." rows="1"></textarea>
+                    <textarea id="message-input" placeholder="Ask a question — type / for commands..." rows="1"></textarea>
                     <button id="send-btn" class="send-btn">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                     </button>
@@ -141,7 +148,7 @@
             <div class="field mt-3">
                 <label class="field-label">Provider</label>
                 <select id="provider-select" class="field-input">
-                    <option value="groq">Groq (Fast — Llama 3)</option>
+                    <option value="groq">Groq</option>
                     <option value="ollama">Ollama (Local)</option>
                     <option value="openai">OpenAI</option>
                     <option value="gemini">Google Gemini</option>
@@ -161,7 +168,7 @@
         </div>
     </dialog>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=2.5"></script>
 
     <!-- Auth Modal -->
     <div class="auth-overlay" id="auth-overlay">
