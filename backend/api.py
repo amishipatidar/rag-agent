@@ -76,12 +76,22 @@ def _get_conversation_session(conversation_id: int) -> ConversationSession:
             idx = FAISSIndex()
             idx.load(conv_faiss_dir)
             session.faiss_index = idx
-            session.uploaded_filename = "(restored from disk)"
+            
+            # Fetch the actual filename from the database if available
+            from backend.database import get_conversation
+            conv_data = get_conversation(conversation_id)
+            if conv_data and conv_data.get("uploaded_filename"):
+                session.uploaded_filename = conv_data["uploaded_filename"]
+            else:
+                session.uploaded_filename = "(restored from disk)"
+                
             if os.path.exists(conv_text_path):
                 with open(conv_text_path, "r", encoding="utf-8") as f:
                     session.uploaded_text = json.load(f)
-        except Exception:
-            pass  # No saved index for this conversation yet
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error loading FAISS index for {conversation_id}: {e}")
         _conversation_sessions[conversation_id] = session
     return _conversation_sessions[conversation_id]
 
@@ -405,9 +415,8 @@ async def chat_stream(request: ChatRequest, current_user: dict = Depends(get_cur
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to create model: {str(e)}")
 
-    # ── Classify intent or use forced intent ─────────────────────────────
-    from backend.orchestrator import classify_intent, get_agent_messages, SUMMARY_PROMPT, SUGGESTION_PROMPT, MODIFICATION_PROMPT
-    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+    # ── LangGraph Orchestration ──────────────────────────────────────────────
+    from backend.orchestrator import build_graph
 
     state = AgentState(
         user_message=effective_message,
@@ -419,53 +428,75 @@ async def chat_stream(request: ChatRequest, current_user: dict = Depends(get_cur
         response=None,
     )
 
-    if forced_intent and forced_intent != "general":
-        # Skip classifier — use forced intent
-        intent = forced_intent
-    elif forced_intent == "general":
-        intent = "general"
-    else:
-        # Auto-classify
-        loop = asyncio.get_event_loop()
-        classified = await loop.run_in_executor(_executor, classify_intent, state, llm)
-        intent = classified["intent"]
-        state = {**state, "intent": intent}
+    # Build and compile graph
+    graph = build_graph(llm)
 
-    # Select prompt based on intent
-    GENERAL_PROMPT = """You are a highly conversational, fun, and engaging AI companion.
-You love chatting, making witty observations, and keeping the energy light and entertaining.
-CRITICAL RULE: NEVER say "As an AI..." or "I don't have personal feelings...". Act like a fun persona with strong opinions and a lively attitude.
-IMPORTANT FORMATTING: Use standard spelling and grammar. Do not drop the 'g' in '-ing' words (e.g., say 'doing' instead of 'doin').
-Answer the user's question directly and conversationally. You do not have any document context for this query."""
-
-    prompt_map = {
-        "summary": SUMMARY_PROMPT,
-        "suggestion": SUGGESTION_PROMPT,
-        "modification": MODIFICATION_PROMPT,
-        "general": GENERAL_PROMPT,
-    }
-    system_prompt = prompt_map.get(intent, SUMMARY_PROMPT)
-
-    # Build messages for the specialist agent
-    messages = get_agent_messages(state, system_prompt)
-
-    # ── Stream the specialist agent response ─────────────────────────────
+    # ── Stream the response from LangGraph ─────────────────────────────
     async def event_generator():
         full_response = ""
         start_time = time.time()
-
-        # Send intent immediately so frontend can update routing UI
-        yield f"data: {{\"type\": \"intent\", \"intent\": \"{intent}\", \"conversation_id\": {conv_id}}}\n\n"
+        final_intent = forced_intent or "general"
 
         try:
-            # Stream tokens from LLM
-            for chunk in llm.stream(messages):
-                token = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                if token:
-                    full_response += token
-                    # Escape token for JSON
+            revision_count = 0
+            final_summary_text = ""
+            active_node = ""
+            
+            # Stream events from LangGraph
+            async for event in graph.astream_events(state, version="v2"):
+                kind = event["event"]
+                node_name = event.get("name", "")
+
+                # Inject professional status events for the UI
+                if kind == "on_chain_start":
+                    if node_name in ["classify", "summary", "critic", "suggestion", "modification", "general", "classify_wrapper", "summary_wrapper", "critic_wrapper", "suggestion_wrapper", "modification_wrapper", "general_wrapper"]:
+                        active_node = node_name
+                        
+                    if node_name in ["summary", "summary_wrapper", "summary_node"]:
+                        revision_count += 1
+                        yield f"data: {{\"type\": \"status\", \"message\": \"Drafting Summary (Attempt {revision_count})...\"}}\n\n"
+                    elif node_name in ["critic", "critic_wrapper", "critic_node"]:
+                        yield f"data: {{\"type\": \"status\", \"message\": \"Critic Agent evaluating draft...\"}}\n\n"
+
+                # Extract intent once the classifier node finishes
+                elif kind == "on_chain_end" and node_name == "classify":
+                    node_output = event.get("data", {}).get("output", {})
+                    if isinstance(node_output, dict) and "intent" in node_output:
+                        final_intent = node_output["intent"]
+                        yield f"data: {{\"type\": \"intent\", \"intent\": \"{final_intent}\", \"conversation_id\": {conv_id}}}\n\n"
+
+                # Capture the final summary output
+                elif kind == "on_chain_end" and node_name in ["finalize_summary", "finalize_summary_wrapper"]:
+                    node_output = event.get("data", {}).get("output", {})
+                    if isinstance(node_output, dict) and "response" in node_output:
+                        final_summary_text = node_output["response"]
+
+                # Extract tokens from the agent node's LLM stream
+                elif kind == "on_chat_model_stream":
+                    # Suppress tokens from internal reasoning nodes
+                    if active_node in ["classify", "classify_wrapper", "critic", "critic_wrapper"]:
+                        continue
+                        
+                    # Suppress raw token streaming if we are in the complex summary loop
+                    if final_intent != "summary":
+                        chunk = event["data"]["chunk"]
+                        token = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                        if token:
+                            full_response += token
+                            safe_token = token.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+                            yield f"data: {{\"type\": \"token\", \"token\": \"{safe_token}\"}}\n\n"
+
+            # If we suppressed the summary stream, fast-stream the final result now
+            if final_intent == "summary" and final_summary_text:
+                full_response = final_summary_text
+                # Clear the status pill by sending a clear event (handled by yielding a token)
+                # Actually, app.js resets on the first token, but let's yield it in chunks of 5 to look nice
+                chunk_size = 5
+                for i in range(0, len(final_summary_text), chunk_size):
+                    token = final_summary_text[i:i+chunk_size]
                     safe_token = token.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
                     yield f"data: {{\"type\": \"token\", \"token\": \"{safe_token}\"}}\n\n"
+                    await asyncio.sleep(0.01)
 
             latency_ms = int((time.time() - start_time) * 1000)
 
@@ -473,7 +504,7 @@ Answer the user's question directly and conversationally. You do not have any do
             save_message(
                 conv_id, "assistant", full_response,
                 provider=request.provider, model=request.model,
-                agent_type=intent
+                agent_type=final_intent
             )
             langfuse_flush()
 

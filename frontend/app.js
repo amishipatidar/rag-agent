@@ -16,7 +16,6 @@ function clearToken() {
     currentUserEmail = null;
 }
 
-// Wrapper around fetch that automatically adds Authorization header
 async function authFetch(url, options = {}) {
     const token = getToken();
     const headers = { ...(options.headers || {}) };
@@ -111,19 +110,22 @@ function goHome() {
     }
     document.getElementById('back-btn').style.display = 'none';
     document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
-    checkExistingDocument();
-}
-
-function startNewChat() {
-    conversationId = null;
-    messagesContainer.innerHTML = '';
-    if (welcomeScreen) {
-        messagesContainer.appendChild(welcomeScreen);
-        welcomeScreen.style.display = '';
+    
+    // Reset document UI state for new chat
+    if (uploadStatus && uploadZone) {
+        uploadStatus.textContent = '';
+        uploadStatus.className = 'upload-status';
+        uploadZone.style.borderColor = '';
+        uploadZone.style.backgroundColor = '';
+        uploadZone.classList.remove('uploaded');
+        const ul = document.getElementById('upload-label');
+        if (ul) ul.textContent = 'Upload File';
     }
-    document.getElementById('back-btn').style.display = 'none';
-    document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
-    checkExistingDocument();
+    
+    if (messageInput) {
+        messageInput.value = '';
+        messageInput.focus();
+    }
 }
 
 function initApp() {
@@ -131,10 +133,10 @@ function initApp() {
     document.getElementById('user-email').textContent = email;
     currentUserEmail = email;
     loadModels();
-    fetchCommands();
+    onProviderChange();
     updateBadge();
     loadConversations();
-    checkExistingDocument();
+    fetchCommands();
 }
 
 // ── Conversation History ───────────────────────────────────────────────────
@@ -151,7 +153,6 @@ async function loadConversations() {
 function renderConversations(convs) {
     const list = document.getElementById('conv-list');
     const empty = document.getElementById('conv-empty');
-    // Remove old conversation items (keep the empty placeholder)
     list.querySelectorAll('.conv-item').forEach(el => el.remove());
 
     if (!convs || convs.length === 0) {
@@ -180,29 +181,26 @@ function renderConversations(convs) {
                 </button>
             </div>
         `;
-        item.addEventListener('click', () => loadConversationMessages(conv.id, item));
+        item.addEventListener('click', () => loadConversationMessages(conv, item));
         list.appendChild(item);
     });
 }
 
-async function loadConversationMessages(convId, itemEl) {
+async function loadConversationMessages(conv, itemEl) {
+    const convId = typeof conv === 'object' ? conv.id : conv;
     try {
         const resp = await authFetch(`${API}/api/conversations/${convId}/messages`);
         if (!resp.ok) return;
         const messages = await resp.json();
 
-        // Set active conversation
         conversationId = convId;
         document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
         if (itemEl) itemEl.classList.add('active');
 
-        // Clear chat and hide welcome screen
         messagesContainer.innerHTML = '';
         if (welcomeScreen) welcomeScreen.style.display = 'none';
-        // Show back button
         document.getElementById('back-btn').style.display = 'flex';
 
-        // Render each message
         messages.forEach(msg => {
             if (msg.role === 'user') {
                 addMessage('user', msg.content);
@@ -212,7 +210,23 @@ async function loadConversationMessages(convId, itemEl) {
         });
 
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        checkExistingDocument();
+        
+        // Update document UI state based on this conversation's uploaded_filename
+        const ul = document.getElementById('upload-label');
+        if (typeof conv === 'object' && conv.uploaded_filename) {
+            uploadStatus.textContent = `${conv.uploaded_filename} loaded`;
+            uploadStatus.className = 'upload-status success';
+            uploadZone.classList.add('uploaded');
+            if (ul) ul.textContent = conv.uploaded_filename;
+        } else {
+            uploadStatus.textContent = '';
+            uploadStatus.className = 'upload-status';
+            uploadZone.classList.remove('uploaded');
+            uploadZone.style.borderColor = '';
+            uploadZone.style.backgroundColor = '';
+            if (ul) ul.textContent = 'Upload File';
+        }
+        
     } catch (e) {}
 }
 
@@ -252,7 +266,7 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
 const docPane = document.getElementById('doc-pane');
-const commandAutocomplete = document.getElementById('command-autocomplete');
+const commandAutocomplete = document.getElementById('cmd-autocomplete');
 const docContent = document.getElementById('doc-content');
 
 // Init
@@ -268,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupEventListeners();
 
-    // Check if user is already logged in
     if (getToken()) {
         hideAuthModal();
         initApp();
@@ -287,15 +300,14 @@ async function fetchCommands() {
         const resp = await authFetch(`${API}/api/commands`);
         if (resp.ok) _commands = await resp.json();
     } catch (e) {
-        // Fallback static commands
         _commands = {
-            '/help':    { description: 'Show command reference', icon: '?', agent: 'system' },
-            '/status':  { description: 'Document & index status', icon: 'i', agent: 'system' },
-            '/clear':   { description: 'Clear conversation', icon: '×', agent: 'system' },
-            '/chat':    { description: 'General conversation (no doc needed)', icon: '›', agent: 'general' },
-            '/summary': { description: 'Route to Summary Agent', icon: 'Σ', agent: 'summary' },
-            '/suggest': { description: 'Route to Suggestion Agent', icon: '*', agent: 'suggestion' },
-            '/modify':  { description: 'Route to Modification Agent', icon: '/', agent: 'modification' },
+            '/help':    { description: 'Show command reference', icon: '❓', agent: 'system' },
+            '/status':  { description: 'Document & index status', icon: '📊', agent: 'system' },
+            '/clear':   { description: 'Clear conversation', icon: '🗑️', agent: 'system' },
+            '/chat':    { description: 'General conversation (no doc needed)', icon: '💬', agent: 'general' },
+            '/summary': { description: 'Route to Summary Agent', icon: '📋', agent: 'summary' },
+            '/suggest': { description: 'Route to Suggestion Agent', icon: '💡', agent: 'suggestion' },
+            '/modify':  { description: 'Route to Modification Agent', icon: '✏️', agent: 'modification' },
         };
     }
 }
@@ -311,22 +323,20 @@ function showCommandAutocomplete(filter = '') {
     }
     _acActiveIndex = 0;
     commandAutocomplete.innerHTML =
-        '<div class="command-autocomplete-header">Command Activation</div>' +
+        '<div class="cmd-autocomplete-title">⚡ Command Activation</div>' +
         _acFilteredCommands.map((cmd, i) => {
             const c = _commands[cmd];
-            return `<button class="command-item${i === 0 ? ' active' : ''}" data-cmd="${cmd}">
-                <span class="command-icon">${c.icon}</span>
-                <div class="command-info">
-                    <span class="command-name">${cmd}</span>
-                    <span class="command-desc">${c.description}</span>
+            return `<button class="cmd-item${i === 0 ? ' selected' : ''}" data-cmd="${cmd}">
+                <span class="cmd-item-icon">${c.icon}</span>
+                <div class="cmd-item-text">
+                    <div class="cmd-item-name">${cmd}</div>
+                    <div class="cmd-item-desc">${c.description}</div>
                 </div>
-                <span class="command-agent-pill ${c.agent}">${c.agent}</span>
             </button>`;
         }).join('');
-    commandAutocomplete.style.display = 'block';
+    commandAutocomplete.classList.add('visible');
 
-    // Click handlers on items
-    commandAutocomplete.querySelectorAll('.command-item').forEach(item => {
+    commandAutocomplete.querySelectorAll('.cmd-item').forEach(item => {
         item.addEventListener('click', () => {
             selectCommand(item.dataset.cmd);
         });
@@ -334,13 +344,12 @@ function showCommandAutocomplete(filter = '') {
 }
 
 function hideCommandAutocomplete() {
-    commandAutocomplete.style.display = 'none';
+    commandAutocomplete.classList.remove('visible');
     _acActiveIndex = -1;
     _acFilteredCommands = [];
 }
 
 function selectCommand(cmd) {
-    // For system commands that don't take args, set and send immediately
     const noArgCmds = ['/help', '/status', '/clear'];
     if (noArgCmds.includes(cmd)) {
         messageInput.value = cmd;
@@ -355,7 +364,7 @@ function selectCommand(cmd) {
 }
 
 function handleAutocompleteKeydown(e) {
-    if (commandAutocomplete.style.display === 'none') return false;
+    if (!commandAutocomplete.classList.contains('visible')) return false;
 
     if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -384,15 +393,13 @@ function handleAutocompleteKeydown(e) {
 }
 
 function updateAutocompleteActive() {
-    const items = commandAutocomplete.querySelectorAll('.command-item');
-    items.forEach((item, i) => item.classList.toggle('active', i === _acActiveIndex));
-    // Scroll active into view
+    const items = commandAutocomplete.querySelectorAll('.cmd-item');
+    items.forEach((item, i) => item.classList.toggle('selected', i === _acActiveIndex));
     if (items[_acActiveIndex]) items[_acActiveIndex].scrollIntoView({ block: 'nearest' });
 }
 
 function onMessageInputForAutocomplete() {
     const val = messageInput.value;
-    // Show autocomplete when the text is exactly "/" or "/" followed by word characters at the start
     const match = val.match(/^\/(\w*)$/);
     if (match) {
         showCommandAutocomplete(match[1]);
@@ -408,7 +415,6 @@ function setupEventListeners() {
 
     sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keydown', (e) => {
-        // Autocomplete navigation takes priority
         if (handleAutocompleteKeydown(e)) return;
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
@@ -431,14 +437,12 @@ function setupEventListeners() {
     });
 
     document.getElementById('logout-topbar-btn').addEventListener('click', handleLogout);
-    newChatBtn.addEventListener('click', startNewChat);
+    newChatBtn.addEventListener('click', goHome);
     settingsBtn.addEventListener('click', () => settingsModal.showModal());
     closeSettingsBtn.addEventListener('click', () => settingsModal.close());
     document.getElementById('cancel-settings-btn2').addEventListener('click', () => settingsModal.close());
 
-    // Back button — returns to welcome screen
     document.getElementById('back-btn').addEventListener('click', goHome);
-    // Doc pane toggle
     document.getElementById('close-doc-btn').addEventListener('click', hideDocumentPane);
     document.getElementById('toggle-doc-btn').addEventListener('click', toggleDocumentPane);
 
@@ -449,7 +453,6 @@ function setupEventListeners() {
         });
     });
 
-    // Close autocomplete on outside click
     document.addEventListener('click', (e) => {
         if (!messageInput.contains(e.target) && !commandAutocomplete.contains(e.target)) {
             hideCommandAutocomplete();
@@ -468,13 +471,11 @@ function closeSidebar() {
 }
 
 function getSelectedModel() {
-    // Prefer dropdown value if visible, otherwise fall back to text input
     if (modelSelect.style.display !== 'none' && modelSelect.value) return modelSelect.value;
-    return modelInput.value.trim() || 'llama3';
+    return modelInput.value.trim() || 'llama-3.3-70b-versatile';
 }
 function updateBadge() { badgeText.textContent = `${providerSelect.value} / ${getSelectedModel()}`; }
 
-// Cache for /api/models response
 let _modelsCache = null;
 
 async function loadModels() {
@@ -482,12 +483,11 @@ async function loadModels() {
         const resp = await authFetch(`${API}/api/models`);
         _modelsCache = await resp.json();
     } catch (err) {
-        console.error("Failed to fetch models, using fallback.", err);
         _modelsCache = {
-            "ollama": [],
-            "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-            "gemini": ["gemini-2.0-flash", "gemini-2.5-flash-preview-05-20", "gemini-1.5-pro"],
-            "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
+            ollama: [],
+            openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+            gemini: ['gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-1.5-pro'],
+            groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
         };
     }
     populateModelDropdown();
@@ -505,7 +505,6 @@ function populateModelDropdown() {
             opt.textContent = m;
             modelSelect.appendChild(opt);
         });
-        // Preserve current selection if it exists in the list
         const current = modelInput.value.trim();
         if (models.includes(current)) {
             modelSelect.value = current;
@@ -516,7 +515,6 @@ function populateModelDropdown() {
         modelSelect.style.display = '';
         modelInput.style.display = 'none';
     } else {
-        // No known models for this provider — show text input
         modelSelect.style.display = 'none';
         modelInput.value = '';
         modelInput.style.display = '';
@@ -536,35 +534,13 @@ function onProviderChange() {
 }
 
 async function checkExistingDocument() {
-    if (!conversationId) {
-        uploadZone.classList.remove('uploaded');
-        document.getElementById('upload-label').textContent = 'Upload File';
-        hideDocumentPane();
-        return;
-    }
-    
     try {
-        const resp = await authFetch(`${API}/api/status?conversation_id=${conversationId}`);
-        const data = await resp.json();
-        if (data.document_loaded) {
-            uploadZone.classList.add('uploaded');
-            document.getElementById('upload-label').textContent = data.document_loaded;
-            
-            const docResp = await authFetch(`${API}/api/document?conversation_id=${conversationId}`);
-            if (docResp.ok) {
-                const docData = await docResp.json();
-                showDocumentPane(docData.text);
-            }
-        } else {
-            uploadZone.classList.remove('uploaded');
-            document.getElementById('upload-label').textContent = 'Upload File';
-            hideDocumentPane();
+        const resp = await authFetch(`${API}/api/document`);
+        if (resp.ok) {
+            const data = await resp.json();
+            showDocumentPane(data.text);
         }
-    } catch (e) {
-        uploadZone.classList.remove('uploaded');
-        document.getElementById('upload-label').textContent = 'Upload File';
-        hideDocumentPane();
-    }
+    } catch (e) {}
 }
 
 async function handleFileUpload() {
@@ -590,16 +566,14 @@ async function handleFileUpload() {
         const data = await resp.json();
 
         if (resp.ok) {
+            if (data.conversation_id) {
+                conversationId = data.conversation_id;
+                loadConversations();
+            }
             setUploadStatus(`${data.filename} loaded`, 'success');
             uploadZone.classList.add('uploaded');
             document.getElementById('upload-label').textContent = file.name;
             setTimeout(() => { if (uploadProgress) uploadProgress.style.width = '0%'; }, 500);
-            
-            if (data.conversation_id && data.conversation_id !== conversationId) {
-                conversationId = data.conversation_id;
-                loadConversations();
-            }
-            
             checkExistingDocument();
         } else {
             setUploadStatus(`Error: ${data.detail}`, 'error');
@@ -623,8 +597,6 @@ function showDocumentPane(text) {
         docPane.style.width = '38%';
     }
     docContent.textContent = text;
-
-    // Show resizer and toggle button
     const resizer = document.getElementById('pane-resizer');
     const toggleBtn = document.getElementById('toggle-doc-btn');
     if (resizer) resizer.style.display = '';
@@ -708,7 +680,6 @@ async function sendMessage() {
 
     addMessage('user', text);
     messageInput.value = ''; messageInput.style.height = 'auto'; sendBtn.disabled = true;
-    // Show back button when entering chat view
     document.getElementById('back-btn').style.display = 'flex';
     const typingEl = showTyping();
 
@@ -739,7 +710,7 @@ async function sendMessage() {
         msgEl.className = 'message assistant';
         const avatar = document.createElement('div');
         avatar.className = 'msg-avatar router';
-        avatar.textContent = 'AI';
+        avatar.textContent = '⚙️';
         const bubble = document.createElement('div');
         bubble.className = 'msg-body streaming';
         msgEl.appendChild(avatar);
@@ -769,14 +740,18 @@ async function sendMessage() {
                     if (event.type === 'intent') {
                         intent = event.intent;
                         conversationId = event.conversation_id;
-                        // Update avatar icon based on intent
-                        const icons = { summary: 'S', suggestion: 'G', modification: 'M' };
-                        avatar.textContent = icons[intent] || 'AI';
+                        const icons = { summary: '📋', suggestion: '💡', modification: '✏️', general: '💬', system: 'ℹ️', clear: '🗑️' };
+                        avatar.textContent = icons[intent] || '⚙️';
                         avatar.className = `msg-avatar assistant ${intent}`;
+
+                    } else if (event.type === 'status') {
+                        bubble.innerHTML = `<div style="display: flex; align-items: center; gap: 8px; color: var(--blue); font-size: 0.9rem; padding: 6px 0;">
+                            <span class="routing-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span>
+                            <i>${event.message}</i>
+                        </div>`;
 
                     } else if (event.type === 'token') {
                         fullText += event.token;
-                        // Render markdown progressively
                         if (window.marked) {
                             bubble.innerHTML = marked.parse(fullText);
                         } else {
@@ -787,15 +762,11 @@ async function sendMessage() {
                     } else if (event.type === 'done') {
                         metaInfo = event;
                         bubble.classList.remove('streaming');
-                        // Append metadata
                         const meta = document.createElement('div');
                         meta.className = 'msg-meta';
                         meta.innerHTML = `<span>${event.provider}/${event.model}</span><span class="metric">${(event.latency_ms / 1000).toFixed(1)}s</span><span class="intent-pill ${intent}">${intent}</span>`;
                         bubble.appendChild(meta);
-                        // Refresh conversation list so new chat appears in sidebar
                         loadConversations();
-                        // Update document pane visibility in case conversation ID changed
-                        checkExistingDocument();
 
                     } else if (event.type === 'error') {
                         bubble.textContent = `Error: ${event.detail}`;
@@ -813,29 +784,24 @@ async function sendMessage() {
 function addMessage(role, content, intent, provider, model, latency_ms) {
     const msg = document.createElement('div');
     msg.className = `message ${role}`;
-    
+
     const avatar = document.createElement('div');
-    
+
     let aiClass = 'msg-avatar assistant';
-    let aiIcon = 'AI';
-    
-    if (intent === 'summary') {
-        aiClass += ' summary';
-        aiIcon = 'S';
-    } else if (intent === 'suggestion') {
-        aiClass += ' suggestion';
-        aiIcon = 'G';
-    } else if (intent === 'modification') {
-        aiClass += ' modification';
-        aiIcon = 'M';
-    }
+    let aiIcon = '⚙️';
+
+    if (intent === 'summary') { aiClass += ' summary'; aiIcon = '📋'; }
+    else if (intent === 'suggestion') { aiClass += ' suggestion'; aiIcon = '💡'; }
+    else if (intent === 'modification') { aiClass += ' modification'; aiIcon = '✏️'; }
+    else if (intent === 'general') { aiClass += ' general'; aiIcon = '💬'; }
+    else if (intent === 'system') { aiClass += ' system'; aiIcon = 'ℹ️'; }
 
     avatar.className = role === 'user' ? 'msg-avatar' : aiClass;
-    avatar.textContent = role === 'user' ? 'U' : aiIcon;
+    avatar.textContent = role === 'user' ? '👤' : aiIcon;
 
     const bubble = document.createElement('div');
     bubble.className = 'msg-body';
-    
+
     if (role === 'assistant' && window.marked) {
         bubble.innerHTML = marked.parse(content);
     } else {
@@ -847,7 +813,8 @@ function addMessage(role, content, intent, provider, model, latency_ms) {
     if (role === 'assistant' && intent && intent !== 'error') {
         const meta = document.createElement('div');
         meta.className = 'msg-meta';
-        let metaHtml = `<span>${provider}/${model}</span>`;
+        let metaHtml = '';
+        if (provider && model) metaHtml += `<span>${provider}/${model}</span>`;
         if (latency_ms) metaHtml += `<span class="metric">${(latency_ms / 1000).toFixed(1)}s</span>`;
         metaHtml += `<span class="intent-pill ${intent}">${intent}</span>`;
         meta.innerHTML = metaHtml;
@@ -859,11 +826,11 @@ function addMessage(role, content, intent, provider, model, latency_ms) {
 }
 
 function showTyping() {
-    const msg = document.createElement('div'); 
+    const msg = document.createElement('div');
     msg.className = 'message assistant';
-    
+
     msg.innerHTML = `
-        <div class="msg-avatar router">AI</div>
+        <div class="msg-avatar router">⚙️</div>
         <div class="msg-body">
             <div class="routing-container" id="routing-container">
                 <div class="routing-step">
@@ -873,20 +840,20 @@ function showTyping() {
             </div>
         </div>
     `;
-    
-    messagesContainer.appendChild(msg); 
-    messagesContainer.scrollTop = messagesContainer.scrollHeight; 
-    
+
+    messagesContainer.appendChild(msg);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
     setTimeout(() => {
         const container = msg.querySelector('#routing-container');
         if(container) {
             container.innerHTML += `
-                <div class="routing-step mt-2" style="color: var(--blue);">
+                <div class="routing-step mt-2" style="color: var(--accent);">
                     <span class="routing-spinner"></span>
                     <span>Routing to Specialist Agent...</span>
                 </div>
             `;
-            messagesContainer.scrollTop = messagesContainer.scrollHeight; 
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     }, 1500);
 
