@@ -4,12 +4,13 @@
 ![RAGgent](https://img.shields.io/badge/Status-Active-success)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688)
-![LangChain](https://img.shields.io/badge/LangChain-Integration-green)
+![LangGraph](https://img.shields.io/badge/LangGraph-Integration-green)
 
 RAG Agent is a powerful AI chatbot that uses Retrieval-Augmented Generation (RAG) to provide highly context-aware responses based on your documents. Designed for enterprise use, it features a multi-agent architecture to dynamically route user queries to the best specialized agent.
 
 ## Key Features
 - **Multi-Agent Architecture:** Dynamically routes queries to Specialist Agents (Summary, Suggestion, Modification).
+- **LangGraph State Machine:** Complex agent looping and evaluation (e.g. Critic Agent reviewing and rejecting drafts) is seamlessly managed via LangGraph.
 - **Document Ingestion:** Upload PDF, DOCX, and XLSX files to dynamically create a FAISS vector database. Each conversation has its own dedicated document context.
 - **Persistent Memory:** SQLite database keeps track of user conversations, chat history, and uploaded files.
 - **Provider Agnostic:** Supports multiple LLM providers (Ollama, OpenAI, Groq, Google Gemini).
@@ -20,7 +21,7 @@ RAG Agent is a powerful AI chatbot that uses Retrieval-Augmented Generation (RAG
 
 ## System Architecture
 
-The core of RAG Agent is built on an intelligent orchestration layer using LangChain. User queries are either routed explicitly via Slash Commands, or dynamically analyzed and routed to the most appropriate AI agent based on the intent.
+The core of RAG Agent is built on an intelligent orchestration layer using **LangGraph**. User queries are either routed explicitly via Slash Commands, or dynamically analyzed and routed to the most appropriate AI agent based on the intent.
 
 ```mermaid
 graph TD
